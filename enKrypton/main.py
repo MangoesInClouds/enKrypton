@@ -342,25 +342,42 @@ class Krypt:
 # =========================================================
 
 def makePw():
-    filename = "test.krypt"
+    # Always use the file beside this Python script, regardless of
+    # the terminal/VS Code working directory.
+    filename = Path(__file__).resolve().parent / "test.krypt"
+    krypt = Krypt(filename)
+    print("Using vault file:", krypt.path)
     master_password = getpass.getpass("Master password: ")
 
-    krypt = Krypt(filename)
+    # Preserve the vaults already in the file.
+    if krypt.path.exists():
+        # If the master password is wrong, load() raises an error.
+        # That stops us from replacing the existing file.
+        vaults = krypt.load(master_password)
+    else:
+        vaults = {}
 
     username = input("Username for the new vault: ").strip()
     if not username:
         raise ValueError("Username cannot be empty")
 
+    # Avoid silently replacing a vault with the same username.
+    if username in vaults:
+        confirm = input(
+            f"Vault {username!r} already exists. Replace it? (y/N): "
+        ).strip().lower()
+        if confirm != "y":
+            print("Cancelled; existing vaults were not changed.")
+            return
+
     password = Kryption.generate_random_password()
 
-    vaults = {
-        username: Krypt.create_vault(
-            username,
-            password,
-            100,
-            {"type": "account", "version": 1}
-        )
-    }
+    vaults[username] = Krypt.create_vault(
+        username,
+        password,
+        100,
+        {"type": "account", "version": 1}
+    )
 
     krypt.save_krypt(vaults, master_password)
 
@@ -368,7 +385,8 @@ def makePw():
 
 
 def getPw():
-    filename = "test.krypt"
+    # Use the same absolute path as makePw().
+    filename = Path(__file__).resolve().parent / "test.krypt"
     master_password = getpass.getpass("Master password: ")
 
     krypt = Krypt(filename)
